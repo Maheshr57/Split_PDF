@@ -1,6 +1,3 @@
 [build]
   publish = "public"
-  command = "pip install -r requirements.txt && python app.py"
-
-[context.production.environment]
-  PYTHON_VERSION = "3.9"
+  command = "pip install -r requirements.txt && gunicorn app:app"
