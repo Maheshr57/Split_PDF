@@ -59,4 +59,4 @@ def parse_page_ranges(pages_str):
     return sorted(pages)
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
