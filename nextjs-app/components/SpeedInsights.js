@@ -1,24 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 const SpeedInsights = () => {
-  const [speedData, setSpeedData] = useState(null);
+  const [url, setUrl] = useState('');
+  const [insights, setInsights] = useState(null);
 
-  useEffect(() => {
-    // Fetch speed insights data from an API or service
-    fetch('/api/speed-insights')
-      .then(response => response.json())
-      .then(data => setSpeedData(data))
-      .catch(error => console.error('Error fetching speed insights:', error));
-  }, []);
-
-  if (!speedData) {
-    return <div>Loading speed insights...</div>;
-  }
+  const fetchInsights = async () => {
+    const response = await fetch(`/api/speed-insights?url=${encodeURIComponent(url)}`);
+    const data = await response.json();
+    setInsights(data);
+  };
 
   return (
     <div>
-      <h2>Speed Insights</h2>
-      <pre>{JSON.stringify(speedData, null, 2)}</pre>
+      <h1>Speed Insights</h1>
+      <input
+        type="text"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Enter URL"
+      />
+      <button onClick={fetchInsights}>Get Insights</button>
+      {insights && (
+        <pre>{JSON.stringify(insights, null, 2)}</pre>
+      )}
     </div>
   );
 };
