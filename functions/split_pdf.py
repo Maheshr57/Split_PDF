@@ -39,7 +39,11 @@ def index():
             <h2>Upload a PDF to Split</h2>
             <form action="/upload" method="post" enctype="multipart/form-data">
                 <input type="file" name="file" accept="application/pdf">
-                <input type="submit" value="Upload">
+                <p>
+                    <label for="page_ranges">Enter page ranges (e.g., 1-5,6-10,11-15):</label>
+                    <input type="text" name="page_ranges" id="page_ranges">
+                </p>
+                <input type="submit" value="Split PDF">
             </form>
         </body>
     </html>
@@ -58,7 +62,17 @@ def upload_file():
 
         # Get user input for page ranges
         page_range_input = request.form.get('page_ranges')
-        split_ranges = [tuple(map(int, range.split('-'))) for range in page_range_input.split(',')]
+        try:
+            split_ranges = [tuple(map(int, range.split('-'))) for range in page_range_input.split(',')]
+        except ValueError:
+            return '''
+            <html>
+                <body>
+                    <h2>Error: Invalid page range input.</h2>
+                    <p><a href="/">Go back</a></p>
+                </body>
+            </html>
+            '''
 
         split_files = split_pdf(file_path, split_ranges)
 
