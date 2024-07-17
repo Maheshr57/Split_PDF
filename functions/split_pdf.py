@@ -8,11 +8,21 @@ def read_text_from_txt(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         return file.read()
 
-def read_text_from_pdf(file_path):
+def read_text_from_pdf(file_path, page_ranges):
     doc = fitz.open(file_path)
     text = ""
-    for page in doc:
-        text += page.get_text()
+    
+    last_page = 0
+    for start, end in page_ranges:
+        for page_num in range(start, end):
+            text += doc.load_page(page_num).get_text()
+        last_page = end
+
+    # Automatically add remaining pages to the last split
+    if last_page < doc.page_count:
+        for page_num in range(last_page, doc.page_count):
+            text += doc.load_page(page_num).get_text()
+    
     return text
 
 def read_text_from_word(file_path):
@@ -49,11 +59,11 @@ def summarize_large_text(text, chunk_size=1024, max_length=150, min_length=30):
     summaries = [summarize_text_chunk(chunk, max_length, min_length) for chunk in chunks]
     return ' '.join(summaries)
 
-def summarize_file(file_path):
+def summarize_file(file_path, page_ranges):
     if file_path.endswith('.txt'):
         text = read_text_from_txt(file_path)
     elif file_path.endswith('.pdf'):
-        text = read_text_from_pdf(file_path)
+        text = read_text_from_pdf(file_path, page_ranges)
     elif file_path.endswith('.docx'):
         text = read_text_from_word(file_path)
     elif file_path.endswith('.pptx'):
@@ -76,10 +86,18 @@ def save_summary_to_pdf(summary, output_path):
     pdf.output(output_path)
 
 # Example usage
-file_path = 'D:\\ISE\\6th_Sem\\ME\\unit1.pdf'  # Replace with your file path
-summary = summarize_file(file_path)
-print("Summary:\n", summary)
+def main():
+    file_path = 'path/to/your/file.pdf'  # Replace with your file path
+    page_ranges = [(0, 5), (5, 10)]  # Example page ranges, automatically handles remaining pages
 
-output_pdf_path = 'D:\\ISE\\6th_Sem\\ME\\unit1_summary.pdf'  # Path to save the summary PDF
-save_summary_to_pdf(summary, output_pdf_path)
-print(f"Summary saved to {output_pdf_path}")
+    # Summarize file
+    summary = summarize_file(file_path, page_ranges)
+    print("Summary:\n", summary)
+
+    # Save summary to PDF
+    output_pdf_path = 'path/to/save/summary.pdf'  # Path to save the summary PDF
+    save_summary_to_pdf(summary, output_pdf_path)
+    print(f"Summary saved to {output_pdf_path}")
+
+if __name__ == "__main__":
+    main()
