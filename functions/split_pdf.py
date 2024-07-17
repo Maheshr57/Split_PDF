@@ -14,7 +14,7 @@ def split_pdf(file_path, split_ranges):
     split_files = []
     for i, (start, end) in enumerate(split_ranges):
         split_doc = fitz.open()  # Create a new PDF document
-        for page_num in range(start, end):
+        for page_num in range(start - 1, end):  # Subtract 1 from start since PyMuPDF uses 0-based indexing
             split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
         split_file_path = os.path.join(download_folder, f"pdf-split-{i+1}.pdf")
         split_doc.save(split_file_path)
