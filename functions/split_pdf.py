@@ -8,28 +8,32 @@ def get_downloads_folder():
     return os.path.join(os.path.expanduser("~"), "Downloads")
 
 def split_pdf(file_path, split_ranges):
-    doc = fitz.open(file_path)
-    download_folder = get_downloads_folder()
+    try:
+        doc = fitz.open(file_path)
+        download_folder = get_downloads_folder()
 
-    split_files = []
-    for i, (start, end) in enumerate(split_ranges):
-        split_doc = fitz.open()  # Create a new PDF document
-        for page_num in range(start - 1, end):  # Subtract 1 from start since PyMuPDF uses 0-based indexing
-            split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
-        split_file_path = os.path.join(download_folder, f"pdf-split-{i+1}.pdf")
-        split_doc.save(split_file_path)
-        split_files.append(split_file_path)
+        split_files = []
+        for i, (start, end) in enumerate(split_ranges):
+            split_doc = fitz.open()  # Create a new PDF document
+            for page_num in range(start - 1, end):  # Subtract 1 from start since PyMuPDF uses 0-based indexing
+                split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
+            split_file_path = os.path.join(download_folder, f"pdf-split-{i+1}.pdf")
+            split_doc.save(split_file_path)
+            split_files.append(split_file_path)
 
-    # Automatically add remaining pages to the last split
-    if end < doc.page_count:
-        split_doc = fitz.open()
-        for page_num in range(end, doc.page_count):
-            split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
-        split_file_path = os.path.join(download_folder, f"pdf-split-{len(split_ranges)+1}.pdf")
-        split_doc.save(split_file_path)
-        split_files.append(split_file_path)
+        # Automatically add remaining pages to the last split
+        if end < doc.page_count:
+            split_doc = fitz.open()
+            for page_num in range(end, doc.page_count):
+                split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
+            split_file_path = os.path.join(download_folder, f"pdf-split-{len(split_ranges)+1}.pdf")
+            split_doc.save(split_file_path)
+            split_files.append(split_file_path)
 
-    return split_files
+        return split_files
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
 
 @app.route('/')
 def index():
