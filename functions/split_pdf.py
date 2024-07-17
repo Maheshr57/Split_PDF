@@ -1,64 +1,24 @@
-import json
-import base64
-import io
-import zipfile
 import PyPDF2
+import os
 
-def parse_page_ranges(pages_str):
-    pages = set()
-    for part in pages_str.split(','):
-        if '-' in part:
-            start, end = map(int, part.split('-'))
-            pages.update(range(start, end + 1))
-        else:
-            pages.add(int(part))
-    return sorted(pages)
+def split_pdf(file_path, output_dir):
+    pdf = PyPDF2.PdfFileReader(file_path)
+    for page in range(pdf.getNumPages()):
+        pdf_writer = PyPDF2.PdfFileWriter()
+        pdf_writer.addPage(pdf.getPage(page))
 
-def handler(event, context):
-    try:
-        body = json.loads(event['body'])
-        pdf_base64 = body['pdf']
-        output_pages = body['outputPages']
+        output_filename = os.path.join(output_dir, f'page_{page+1}.pdf')
+        with open(output_filename, 'wb') as out:
+            pdf_writer.write(out)
 
-        pdf_bytes = base64.b64decode(pdf_base64)
-        pdf_buffer = io.BytesIO(pdf_bytes)
+    print(f'Split PDF into {pdf.getNumPages()} pages.')
 
-        pdf = PyPDF2.PdfReader(pdf_buffer)
-        output_files = []
+if __name__ == "__main__":
+    import argparse
 
-        for output_file, pages_str in output_pages.items():
-            pdf_writer = PyPDF2.PdfWriter()
-            pages = parse_page_ranges(pages_str)
+    parser = argparse.ArgumentParser(description='Split a PDF into individual pages.')
+    parser.add_argument('file', help='PDF file to split')
+    parser.add_argument('output_dir', help='Directory to save individual pages')
+    args = parser.parse_args()
 
-            for page_num in pages:
-                if 1 <= page_num <= len(pdf.pages):
-                    page = pdf.pages[page_num - 1]
-                    pdf_writer.add_page(page)
-
-            output_buffer = io.BytesIO()
-            pdf_writer.write(output_buffer)
-            output_buffer.seek(0)
-            output_files.append((output_file, output_buffer.getvalue()))
-
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-            for filename, file_bytes in output_files:
-                zip_file.writestr(filename, file_bytes)
-
-        zip_base64 = base64.b64encode(zip_buffer.getvalue()).decode('utf-8')
-
-        return {
-            'statusCode': 200,
-            'body': json.dumps({'zip': zip_base64}),
-            'headers': {
-                'Content-Type': 'application/json'
-            }
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)}),
-            'headers': {
-                'Content-Type': 'application/json'
-            }
-        }
+    split_pdf(args.file, args.output_dir)
