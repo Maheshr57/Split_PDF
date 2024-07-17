@@ -1,103 +1,64 @@
-import os
-from flask import Flask, request, send_from_directory, redirect, url_for, render_template_string
-import fitz  # PyMuPDF
+import json
+import base64
+import io
+import zipfile
+import PyPDF2
 
-app = Flask(__name__)
+def parse_page_ranges(pages_str):
+    pages = set()
+    for part in pages_str.split(','):
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            pages.update(range(start, end + 1))
+        else:
+            pages.add(int(part))
+    return sorted(pages)
 
-def get_downloads_folder():
-    return os.path.join(os.path.expanduser("~"), "Downloads")
-
-def split_pdf(file_path, split_ranges):
+def handler(event, context):
     try:
-        doc = fitz.open(file_path)
-        download_folder = get_downloads_folder()
+        body = json.loads(event['body'])
+        pdf_base64 = body['pdf']
+        output_pages = body['outputPages']
 
-        split_files = []
-        for i, (start, end) in enumerate(split_ranges):
-            split_doc = fitz.open()  # Create a new PDF document
-            for page_num in range(start - 1, end):  # Subtract 1 from start since PyMuPDF uses 0-based indexing
-                split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
-            split_file_path = os.path.join(download_folder, f"pdf-split-{i+1}.pdf")
-            split_doc.save(split_file_path)
-            split_files.append(split_file_path)
+        pdf_bytes = base64.b64decode(pdf_base64)
+        pdf_buffer = io.BytesIO(pdf_bytes)
 
-        # Automatically add remaining pages to the last split
-        if end < doc.page_count:
-            split_doc = fitz.open()
-            for page_num in range(end, doc.page_count):
-                split_doc.insert_pdf(doc, from_page=page_num, to_page=page_num)
-            split_file_path = os.path.join(download_folder, f"pdf-split-{len(split_ranges)+1}.pdf")
-            split_doc.save(split_file_path)
-            split_files.append(split_file_path)
+        pdf = PyPDF2.PdfReader(pdf_buffer)
+        output_files = []
 
-        return split_files
+        for output_file, pages_str in output_pages.items():
+            pdf_writer = PyPDF2.PdfWriter()
+            pages = parse_page_ranges(pages_str)
+
+            for page_num in pages:
+                if 1 <= page_num <= len(pdf.pages):
+                    page = pdf.pages[page_num - 1]
+                    pdf_writer.add_page(page)
+
+            output_buffer = io.BytesIO()
+            pdf_writer.write(output_buffer)
+            output_buffer.seek(0)
+            output_files.append((output_file, output_buffer.getvalue()))
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+            for filename, file_bytes in output_files:
+                zip_file.writestr(filename, file_bytes)
+
+        zip_base64 = base64.b64encode(zip_buffer.getvalue()).decode('utf-8')
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'zip': zip_base64}),
+            'headers': {
+                'Content-Type': 'application/json'
+            }
+        }
     except Exception as e:
-        print(f"Error: {e}")
-        return []
-
-@app.route('/')
-def index():
-    return '''
-    <html>
-        <body>
-            <h2>Upload a PDF to Split</h2>
-            <form action="/upload" method="post" enctype="multipart/form-data">
-                <input type="file" name="file" accept="application/pdf">
-                <p>
-                    <label for="page_ranges">Enter page ranges (e.g., 1-5,6-10,11-15):</label>
-                    <input type="text" name="page_ranges" id="page_ranges">
-                </p>
-                <input type="submit" value="Split PDF">
-            </form>
-        </body>
-    </html>
-    '''
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return redirect(request.url)
-    file = request.files['file']
-    if file.filename == '':
-        return redirect(request.url)
-    if file:
-        file_path = os.path.join(get_downloads_folder(), file.filename)
-        file.save(file_path)
-
-        # Get user input for page ranges
-        page_range_input = request.form.get('page_ranges')
-        try:
-            split_ranges = [tuple(map(int, range.split('-'))) for range in page_range_input.split(',')]
-        except ValueError:
-            return '''
-            <html>
-                <body>
-                    <h2>Error: Invalid page range input.</h2>
-                    <p><a href="/">Go back</a></p>
-                </body>
-            </html>
-            '''
-
-        split_files = split_pdf(file_path, split_ranges)
-
-        download_links = [url_for('download_file', filename=os.path.basename(f)) for f in split_files]
-        links_html = ''.join([f'<li><a href="{link}">{os.path.basename(link)}</a></li>' for link in download_links])
-
-        return f'''
-        <html>
-            <body>
-                <h2>Download Split PDFs</h2>
-                <ul>
-                    {links_html}
-                </ul>
-            </body>
-        </html>
-        '''
-    return redirect(url_for('index'))
-
-@app.route('/download/<filename>')
-def download_file(filename):
-    return send_from_directory(get_downloads_folder(), filename)
-
-if __name__ == "__main__":
-    app.run(debug=True)
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)}),
+            'headers': {
+                'Content-Type': 'application/json'
+            }
+        }
